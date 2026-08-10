@@ -1,0 +1,7 @@
+result
+result-*
+*.local.nix
+.superpowers/
+
+# internal process docs (Dutch runbook, host paths) — kept locally
+docs/superpowers/
