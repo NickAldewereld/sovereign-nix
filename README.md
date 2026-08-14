@@ -22,7 +22,8 @@ cost of *untargeted, automated* attacks that assume one shape fits every host.
 A targeted attacker pays nothing extra. See
 [Limits](#limits-what-the-tests-cannot-prove).
 
-Status: v1, running on one reference host. Interfaces may still change.
+Status: v1. Running on the author's laptop and on a throwaway VM that anyone
+can recreate. Interfaces may still change.
 Licence: [EUPL-1.2](LICENSE).
 
 ## Claims and the tests that back them
@@ -32,7 +33,7 @@ is stated here rather than left for you to discover.
 
 | Claim | Evidence |
 |---|---|
-| Hardening is actually applied | [`checks/harden.nix`](checks/harden.nix) reads the sysctls and `/proc/cmdline` inside a booted VM |
+| Hardening is actually applied | [`checks/harden.nix`](checks/harden.nix) reads every value from [`lib/harden-policy.nix`](lib/harden-policy.nix) back off a booted VM: the sysctls, `/proc/cmdline`, and the sshd settings as `sshd -T` resolved them rather than as the file spells them |
 | Two seeds, two configurations (not: two attack surfaces) | [`checks/diversity.nix`](checks/diversity.nix) boots two VMs with different seeds and finds SSH on different ports; port 22 is closed |
 | The derived SSH port cannot be stolen by an ephemeral socket | [`checks/diversity.nix`](checks/diversity.nix) reads `ip_local_reserved_ports` in both booted VMs |
 | Same seed, same derived values | [`checks/diversity-lib.nix`](checks/diversity-lib.nix) asserts the derivation is deterministic and stays in range. The converse does not hold, and the same check pins a colliding pair of seeds to prove it |
@@ -41,13 +42,13 @@ is stated here rather than left for you to discover.
 | Incident response can stop the wipe | [`checks/impermanence.nix`](checks/impermanence.nix) runs the wipe with `sovereign.nowipe` on the command line and finds both roots intact |
 | EU resolvers over TLS, EU time | [`checks/sovereign.nix`](checks/sovereign.nix) reads the generated `resolved.conf` and `timesyncd.conf` |
 | The four modules compose | [`checks/default-module.nix`](checks/default-module.nix) forces a full system evaluation |
-| The seed is an input, not a file read at eval time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile` |
+| The host reads no files at evaluation time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile`. The seed reaches the host from the flake; in *your* flake it comes from an input, in this one it is the sentinel in the source tree |
 | The hardening assertions are not vacuous | [`checks/mutation.nix`](checks/mutation.nix) breaks every value in [`lib/harden-policy.nix`](lib/harden-policy.nix) on purpose, one at a time, and requires the comparison to catch each one |
-| A machine cannot wipe its own configuration | [`checks/impermanence.nix`](checks/impermanence.nix) and an evaluation guard: `/etc/nixos` must be persisted, or you have to say out loud that the config lives elsewhere |
+| A machine cannot wipe its own configuration | [`checks/config-guard.nix`](checks/config-guard.nix) proves a system that does not persist `/etc/nixos` fails to *evaluate*, and that `allowEphemeralConfig` is the only other way past it |
 | PID 1 owns the SSH socket, so the port cannot be taken | [`checks/limits.nix`](checks/limits.nix) boots one machine each way and shows an unprivileged user taking the port on the old arrangement and failing on the new one |
 | A configuration that locks you out does not build | [`checks/lockout-guard.nix`](checks/lockout-guard.nix) proves that hardening sshd with no way in fails to *evaluate*, that root keys do not count once root login is off, and that a user with a key or a password clears it |
 | The example seed cannot reach a machine by accident | [`checks/seed-guard.nix`](checks/seed-guard.nix) proves a system on the sentinel seed fails to *evaluate*, and that `allowExampleSeed` is the only way past it |
-| No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for SSH key types, e-mail addresses, disk serials and the author's own names |
+| No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for the *shapes* of SSH key types, e-mail addresses and disk serials. Deliberately not for names or domains: a check that spelled those out would publish the very thing it guards |
 | Someone else can actually take this flake as an input | [`checks/consumable.nix`](checks/consumable.nix) fails the build if `flake.lock` ever contains a `path` input again |
 
 ## Limits: what the tests cannot prove
@@ -128,9 +129,11 @@ module. Take one, take all four.
 
 ### `sovereign.harden`
 
-Kernel sysctls (`kptr_restrict`, `dmesg_restrict`, unprivileged BPF off, Yama
-ptrace scope), boot parameters (`init_on_alloc`, `init_on_free`), a key-only
-sshd with modern crypto, a default-deny firewall, and the Nix sandbox on.
+Kernel sysctls, boot parameters, a key-only sshd with modern crypto, a
+default-deny firewall, `sudo` restricted to the wheel group, and the Nix
+sandbox on. The exact values live in
+[`lib/harden-policy.nix`](lib/harden-policy.nix) rather than in this
+paragraph, so a prose summary cannot drift away from what is applied.
 
 `harden.firewall = false` means "do not touch the firewall", not "disable it".
 
@@ -189,7 +192,9 @@ the system. Keep it out of public repositories anyway.
 ### `sovereign.impermanence`
 
 btrfs `@root` is rolled back to an empty subvolume in the initrd on every
-boot. Only `/nix`, `/home` and the paths you list in `persistPaths` survive.
+boot. What survives: the other subvolumes (`/nix`, `/persist`, `/home`), the
+paths you list in `persistPaths`, and `/boot`, which is a separate partition
+and is never touched by the wipe.
 Malware persistence in the system root, stray config drift and forgotten debug
 edits die at the next reboot. Persistence in `/home` does not: see
 [Limits](#limits-what-the-tests-cannot-prove).
@@ -245,6 +250,7 @@ from `cache.nixos.org`.
 
 ```nix
 {
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
   inputs.sovereign-nix.url = "github:NickAldewereld/sovereign-nix";
 
   # The per-host seed is an input, so evaluation stays pure. Point it at a
@@ -287,8 +293,9 @@ from `cache.nixos.org`.
 }
 ```
 
-Impermanence expects a btrfs filesystem with `@root`, `@nix`, `@persist` and
-`@home` subvolumes. [`hosts/example/disko.nix`](hosts/example/disko.nix) is a
+Impermanence needs `@root` and `@persist`; the example layout also splits off
+`@nix` and `@home`, and `/home` in particular has to be its own subvolume or
+it goes with the root. [`hosts/example/disko.nix`](hosts/example/disko.nix) is a
 working LUKS + btrfs layout you can copy.
 
 ### Where the seed comes from
@@ -333,8 +340,10 @@ Do not point the override at `/persist/etc/sovereign` itself — that is where
 `hashedPasswordFile` and other host secrets live.
 
 No `--impure` is involved: Nix copies the overridden path into the store and
-evaluates it like any other input. Two hosts with different seeds produce
-different derivations and different store paths — there is no collision.
+evaluates it like any other input, so two hosts with different seeds get
+different store paths and cannot overwrite each other's. That is a statement
+about store paths only. The *values* derived from those seeds can collide; see
+[Limits](#limits-what-the-tests-cannot-prove).
 
 A system left on the sentinel seed fails to **evaluate**, so it is stopped
 before anything is built, switched or set as the boot default:
@@ -360,9 +369,11 @@ all four modules on LUKS + btrfs with GNOME: a working disko layout you can
 copy, not a sketch. It carries placeholder values for the disk, the user and
 the keys.
 
-The author runs this configuration on a ThinkPad X270. That machine's own
-config is kept private, because publishing a host's username, authorised keys
-and port range would undo what the diversity module is for.
+The author runs these modules on a ThinkPad X270. That machine's own config is
+kept private, because publishing a host's username, authorised keys and port
+range would undo what the diversity module is for. It is a real daily machine
+rather than a mirror of this repository, so do not assume it runs this exact
+commit; the VM is the one you can reproduce.
 
 ## Development
 
