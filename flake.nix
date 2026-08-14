@@ -52,6 +52,17 @@
         ];
       };
 
+      # A throwaway machine anyone can boot, so the two claims that need a
+      # running system are checkable without access to the author's hardware.
+      # See hosts/vm/README.md.
+      nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          self.nixosModules.default
+          ./hosts/vm
+        ];
+      };
+
       formatter.${system} = pkgs.nixfmt-rfc-style;
 
       checks.${system} = {

@@ -23,7 +23,7 @@ A targeted attacker pays nothing extra. See
 [Limits](#limits-what-the-tests-cannot-prove).
 
 Status: v1. Running on the author's laptop and on a throwaway VM that anyone
-can recreate. Interfaces may still change.
+can recreate from [`hosts/vm/`](hosts/vm/). Interfaces may still change.
 Licence: [EUPL-1.2](LICENSE).
 
 ## Claims and the tests that back them
@@ -361,6 +361,14 @@ and by the time it ran, `/etc/ssh/sshd_config` had already been rewritten.
 `nix flake check` still works for everyone because the example host and the
 checks set `sovereign.diversity.allowExampleSeed = true` explicitly. Delete
 that line when you copy the host.
+
+## Try it without trusting me
+
+[`hosts/vm/`](hosts/vm/) is a throwaway machine that runs all four modules on
+plain btrfs, with a published seed and a password in the file, so anyone can
+boot it in QEMU and check the claims on a running system instead of taking
+this file's word for them. [`hosts/vm/README.md`](hosts/vm/README.md) is the
+runbook, including the reboot that no test in this repository can perform.
 
 ## Reference host
 
