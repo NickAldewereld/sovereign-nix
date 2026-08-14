@@ -1,24 +1,25 @@
 {
   description = "Secure, sovereign NixOS modules — every machine unique, every boot clean, every line auditable";
 
+  # No `hostSeed` input here. A relative `path:` input cannot be locked by
+  # anyone who takes this flake as a dependency: Nix refuses to read the whole
+  # lock file and every consumer fails with "lock file contains unlocked
+  # input". A module library has to be consumable, so the sentinel is read
+  # from the flake source instead, which is just as pure. Your own flake
+  # declares its own seed input; see the README.
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    hostSeed = {
-      url = "path:./example-seed";
-      flake = false;
-    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      hostSeed,
     }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-      seed = nixpkgs.lib.removeSuffix "\n" (builtins.readFile "${hostSeed}/seed");
+      seed = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./example-seed/seed);
     in
     {
       nixosModules = {
@@ -63,6 +64,7 @@
         seed-input = import ./checks/seed-input.nix { inherit pkgs self; };
         seed-guard = import ./checks/seed-guard.nix { inherit pkgs self nixpkgs; };
         no-personal-data = import ./checks/no-personal-data.nix { inherit pkgs; };
+        consumable = import ./checks/consumable.nix { inherit pkgs self; };
       };
     };
 }

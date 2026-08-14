@@ -1,17 +1,5 @@
 {
   "nodes": {
-    "hostSeed": {
-      "flake": false,
-      "locked": {
-        "path": "./example-seed",
-        "type": "path"
-      },
-      "original": {
-        "path": "./example-seed",
-        "type": "path"
-      },
-      "parent": []
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1782847189,
@@ -30,7 +18,6 @@
     },
     "root": {
       "inputs": {
-        "hostSeed": "hostSeed",
         "nixpkgs": "nixpkgs"
       }
     }

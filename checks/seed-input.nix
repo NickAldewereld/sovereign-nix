@@ -1,5 +1,5 @@
-# The reference host must evaluate purely: its seed comes from the hostSeed
-# input, never from a path read at evaluation time.
+# The reference host must evaluate purely: its seed is handed to it by the
+# flake, never read from a path at evaluation time inside the host.
 { pkgs, self }:
 let
   seed = self.nixosConfigurations.example.config.sovereign.diversity.seed;

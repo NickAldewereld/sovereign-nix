@@ -44,6 +44,7 @@ is stated here rather than left for you to discover.
 | The seed is an input, not a file read at eval time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile` |
 | The example seed cannot reach a machine by accident | [`checks/seed-guard.nix`](checks/seed-guard.nix) proves a system on the sentinel seed fails to *evaluate*, and that `allowExampleSeed` is the only way past it |
 | No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for SSH key types, e-mail addresses, disk serials and the author's own names |
+| Someone else can actually take this flake as an input | [`checks/consumable.nix`](checks/consumable.nix) fails the build if `flake.lock` ever contains a `path` input again |
 
 ## Limits: what the tests cannot prove
 
@@ -166,7 +167,7 @@ from `cache.nixos.org`.
   # placeholder in your own repo and override it at rebuild time; see
   # "Where the seed comes from" below.
   inputs.hostSeed = {
-    url = "path:./example-seed";
+    url = "path:./seed.d";
     flake = false;
   };
 
@@ -208,12 +209,12 @@ working LUKS + btrfs layout you can copy.
 
 ### Where the seed comes from
 
-The seed is a flake input, so evaluation stays pure. The default points at
-`example-seed/`, which holds the sentinel value `__example__`:
+The seed is a flake input **of your flake**, so evaluation stays pure and the
+seed never has to live in your repository:
 
 ```nix
 inputs.hostSeed = {
-  url = "path:./example-seed";
+  url = "path:./seed.d";   # a placeholder in your own repo
   flake = false;
 };
 ```
@@ -221,9 +222,18 @@ inputs.hostSeed = {
 A real machine overrides it at rebuild time:
 
 ```bash
-sudo nixos-rebuild switch --flake /etc/nixos#example \
+sudo nixos-rebuild switch --flake /etc/nixos#myhost \
   --override-input hostSeed path:/persist/etc/sovereign/seed.d
 ```
+
+This flake declares no seed input of its own. It cannot: a relative `path:`
+input makes Nix refuse to read the entire lock file from the outside, so every
+consumer fails with `lock file contains unlocked input` before evaluation
+starts. `nix flake check` never sees it, because it only ever evaluates this
+flake as the root. [`checks/consumable.nix`](checks/consumable.nix) now fails
+the build if a path input ever comes back. The sentinel in `example-seed/` is
+read straight from the flake source, which is pure for the same reason any
+other file in the tree is.
 
 **The overridden directory must contain a file named exactly `seed`, and
 nothing else.** `--override-input ... path:` copies the *whole* directory into
