@@ -35,5 +35,9 @@ pkgs.testers.runNixOSTest {
     alpha.succeed("ss -tlnp | grep -q ':${portA} '")
     beta.succeed("ss -tlnp | grep -q ':${portB} '")
     alpha.fail("ss -tlnp | grep -q ':22 '")
+    # the derived port overlaps the ephemeral source-port range, so the kernel
+    # must be told never to hand it out
+    alpha.succeed("grep -qw '${portA}' /proc/sys/net/ipv4/ip_local_reserved_ports")
+    beta.succeed("grep -qw '${portB}' /proc/sys/net/ipv4/ip_local_reserved_ports")
   '';
 }

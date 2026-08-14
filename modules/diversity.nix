@@ -56,12 +56,23 @@ in
 
     services.openssh.ports = [ sshPort ];
 
+    # MAC randomisation is a privacy measure, not a hardening one: it stops a
+    # network from tracking this host across visits. It does not shrink the
+    # attack surface.
     networking.networkmanager.wifi.macAddress = "random";
     networking.networkmanager.ethernet.macAddress = "random";
 
-    # Harmless per-host tuning inside safe margins: every host fingerprints
-    # differently without behaving differently.
     boot.kernel.sysctl = {
+      # The derived range overlaps the kernel's ephemeral source-port range
+      # (net.ipv4.ip_local_port_range, 32768-60999 by default), so an outbound
+      # connection can be holding the sshd port at the moment sshd restarts,
+      # and any unprivileged process can bind it in that window. Reserving the
+      # port stops the kernel from handing it out as a source port at all.
+      # Found by Rick Okkersen.
+      "net.ipv4.ip_local_reserved_ports" = toString sshPort;
+
+      # Harmless per-host tuning inside safe margins: every host fingerprints
+      # differently without behaving differently.
       "vm.swappiness" = dlib.derive cfg.seed "vm.swappiness" {
         min = 30;
         max = 70;

@@ -4,43 +4,64 @@
   nixpkgs,
 }:
 let
-  wipe = import ../lib/wipe-script.nix {
-    device = "/dev/vdb";
-    mountpoint = "/wipe_tmp";
-    persistDirs = [
-      "/var/lib/nixos"
-      "/var/log"
-    ];
-  };
-  wipeScript = pkgs.writeShellScript "sovereign-wipe" wipe;
+  mkWipe =
+    args:
+    pkgs.writeShellScript "sovereign-wipe" (
+      import ../lib/wipe-script.nix (
+        {
+          device = "/dev/vdb";
+          mountpoint = "/wipe_tmp";
+          persistDirs = [
+            "/var/lib/nixos"
+            "/var/log"
+          ];
+        }
+        // args
+      )
+    );
+  wipeScript = mkWipe { };
+  # The kernel command line of the test VM is not ours to set, so the script
+  # reads a file we control instead.
+  wipeSkipped = mkWipe { cmdlineFile = "/tmp/fake-cmdline"; };
+  wipeNoPrev = mkWipe { keepPrevious = false; };
 
   # Prove the module wiring, not just the wipe-script text: /etc/machine-id
   # is neededForBoot, and persistPaths produce a bind mount from
   # /persist<path> for each entry.
-  sys = nixpkgs.lib.nixosSystem {
-    system = "x86_64-linux";
-    modules = [
-      self.nixosModules.impermanence
-      {
-        sovereign.impermanence = {
-          enable = true;
-          device = "/dev/mapper/cryptroot";
-          persistPaths = [ "/var/log" ];
-        };
-        fileSystems."/" = {
-          device = "/dev/mapper/cryptroot";
-          fsType = "btrfs";
-          options = [ "subvol=@root" ];
-        };
-        boot.loader.grub.enable = false;
-        system.stateVersion = "25.11";
-      }
-    ];
-  };
+  mkSys =
+    extra:
+    nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        self.nixosModules.impermanence
+        {
+          sovereign.impermanence = {
+            enable = true;
+            device = "/dev/mapper/cryptroot";
+            persistPaths = [ "/var/log" ];
+          };
+          fileSystems."/" = {
+            device = "/dev/mapper/cryptroot";
+            fsType = "btrfs";
+            options = [ "subvol=@root" ];
+          };
+          boot.loader.grub.enable = false;
+          system.stateVersion = "25.11";
+        }
+        extra
+      ];
+    };
+  sys = mkSys { };
+  sysNoPrev = mkSys { sovereign.impermanence.keepPreviousRoot = false; };
 in
 assert sys.config.fileSystems."/etc/machine-id".neededForBoot == true;
 assert sys.config.fileSystems."/var/log".device == "/persist/var/log";
 assert builtins.elem "bind" sys.config.fileSystems."/var/log".options;
+# keepPreviousRoot reaches the initrd, both ways round
+assert nixpkgs.lib.hasInfix "mv /btrfs_tmp/@root /btrfs_tmp/@root_prev"
+  sys.config.boot.initrd.postDeviceCommands;
+assert nixpkgs.lib.hasInfix "delete_subvol /btrfs_tmp/@root\n"
+  sysNoPrev.config.boot.initrd.postDeviceCommands;
 pkgs.testers.runNixOSTest {
   name = "sovereign-impermanence";
   nodes.machine = {
@@ -84,6 +105,24 @@ pkgs.testers.runNixOSTest {
     machine.fail("test -e /mnt/d/@root_prev/leftover")
     machine.fail("test -e /mnt/d/@root_prev/var/lib/machines")
     machine.fail("test -e /mnt/d/@root/leftover")
+    machine.succeed("test -e /mnt/d/@persist/keepme")
+
+    # sovereign.nowipe on the kernel command line: the root of this boot and
+    # the previous one both stay put, so an incident can be looked at
+    machine.succeed("touch /mnt/d/@root/evidence")
+    machine.succeed("umount /mnt/d")
+    machine.succeed("echo 'root=/dev/vda sovereign.nowipe' > /tmp/fake-cmdline")
+    machine.succeed("${wipeSkipped}")
+    machine.succeed("mount /dev/vdb /mnt/d")
+    machine.succeed("test -e /mnt/d/@root/evidence")
+    machine.succeed("test -e /mnt/d/@root_prev")
+    machine.succeed("umount /mnt/d")
+
+    # keepPreviousRoot = false: no generation is kept at all
+    machine.succeed("${wipeNoPrev}")
+    machine.succeed("mount /dev/vdb /mnt/d")
+    machine.fail("test -e /mnt/d/@root/evidence")
+    machine.fail("test -e /mnt/d/@root_prev")
     machine.succeed("test -e /mnt/d/@persist/keepme")
   '';
 }

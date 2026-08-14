@@ -1,5 +1,7 @@
 # Ephemeral btrfs root: @root is rolled back to empty on every boot; only
-# /persist (and /nix, /home — separate subvolumes) survive.
+# /persist (and /nix, /home — separate subvolumes) survive. /home is NOT
+# wiped, so user-level persistence (~/.bashrc, ~/.config/autostart, ~/.profile)
+# survives a reboot. This module is about the system root, not the user.
 { config, lib, ... }:
 let
   cfg = config.sovereign.impermanence;
@@ -18,6 +20,19 @@ in
       example = [ "/etc/NetworkManager/system-connections" ];
       description = "Directories bind-mounted from /persist<path>.";
     };
+    keepPreviousRoot = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Keep the root of the boot that just ended as the @root_prev subvolume,
+        so on-disk traces of an incident survive the reboot that ended it.
+        Exactly one generation is kept: the next boot deletes it. Mount it
+        read-only to look at it. Set to false to delete the old root outright.
+
+        Volatile evidence (memory, processes, sockets) is gone at any reboot,
+        with or without this module.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -33,6 +48,7 @@ in
       import ../lib/wipe-script.nix {
         device = cfg.device;
         persistDirs = cfg.persistPaths;
+        keepPrevious = cfg.keepPreviousRoot;
       }
     );
 
