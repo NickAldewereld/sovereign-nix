@@ -36,10 +36,10 @@ pkgs.testers.runNixOSTest {
   };
   testScript = ''
     machine.wait_for_unit("multi-user.target")
-    ${lib.concatStringsSep "\n    " sysctlLines}
-    ${lib.concatStringsSep "\n    " cmdlineLines}
+    ${lib.concatStringsSep "\n" sysctlLines}
+    ${lib.concatStringsSep "\n" cmdlineLines}
     # PID 1 owns the listening socket, so sshd.service is idle by design
     machine.wait_for_unit("sshd.socket")
-    ${lib.concatStringsSep "\n    " sshdLines}
+    ${lib.concatStringsSep "\n" sshdLines}
   '';
 }
