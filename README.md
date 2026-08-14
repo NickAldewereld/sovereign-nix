@@ -51,8 +51,10 @@ is stated here rather than left for you to discover.
 Two things were verified by hand instead:
 
 - **A real boot cycle.** The impermanence check exercises the wipe logic on a
-  scratch disk, not a reboot. On the reference host, a file created in `/`
-  was gone after reboot while `/persist` and `/home` were intact.
+  scratch disk, not a reboot. Verified on two machines now: a file created in
+  `/` was gone after reboot while `/persist` and `/home` were intact, and the
+  root of the previous boot was still readable under `@root_prev`. The second
+  machine was a plain VM, so anyone can repeat it.
 - **Reachable resolvers.** A test can only assert what was configured. The DoT
   endpoints were verified by hand: `dns0.eu` did not answer on port 853 from a
   major Dutch ISP, which is why the defaults are DNS4EU and Quad9.
@@ -69,6 +71,15 @@ Four things are not proven at all, and are not claimed:
 - **A changed SSH port as defence.** It removes the host from opportunistic
   scan and log noise. A targeted scan finds sshd in seconds, and key-only auth
   is what actually stops brute force. Treat the port as hygiene, not a control.
+- **The port reservation does not stop squatting.** Measured on a test host:
+  an ESTABLISHED outbound connection on the sshd port does *not* stop sshd from
+  restarting, because sshd sets `SO_REUSEADDR`. What does stop it is a local
+  unprivileged process that LISTENS on the port while sshd is down, which is
+  possible exactly because the port is above 1023, and
+  `ip_local_reserved_ports` does not prevent it: it excludes automatic
+  allocation, not an explicit bind. Worth knowing if that happens: sshd failed
+  to bind `0.0.0.0`, came up on `::` alone, and systemd still reported the
+  unit as `active`. A half-listening sshd looks healthy.
 - **`/home` is not ephemeral.** The wipe covers the system root. `/home` is a
   separate subvolume and survives untouched, so user-level persistence
   (`~/.bashrc`, `~/.profile`, `~/.config/autostart`, a systemd user unit)
@@ -103,10 +114,11 @@ scanner expects it, and a fleet where one hardcoded shape does not fit every
 member. It does **not** make an exploit fail on the next host. See
 [Limits](#limits-what-the-tests-cannot-prove).
 
-The derived port is also added to `net.ipv4.ip_local_reserved_ports`. Without
-that, the range (20000-59999) overlaps the kernel's ephemeral source-port
-range (32768-60999), so an outbound connection can be holding the sshd port at
-the moment sshd restarts.
+The derived port is also added to `net.ipv4.ip_local_reserved_ports`, because
+the range (20000-59999) overlaps the kernel's ephemeral source-port range
+(32768-60999) and the kernel should never hand out the port sshd lives on.
+What that does and does not buy you is measured, not assumed; see
+[Limits](#limits-what-the-tests-cannot-prove).
 
 MAC randomisation is enabled here too, but it is **privacy, not security**: it
 stops a network from tracking the host across visits. It does not shrink the
@@ -126,6 +138,18 @@ edits die at the next reboot. Persistence in `/home` does not: see
 
 Failures are loud: if the wipe cannot run, the machine says so on the console
 and boots the old root rather than silently pretending.
+
+Two things that bite on a real install, both found the first time this was
+installed on a machine other than the author's:
+
+- **Put `/etc/nixos` in `persistPaths`.** It lives on the root. Without it your
+  configuration is gone at the first reboot, and the machine is then hard to
+  rebuild from itself.
+- **Reinstalling over an existing impermanent root fails at the bootloader**
+  with `IndexError: list index out of range`. The wipe leaves an empty
+  `/etc/machine-id` placeholder on the root while the real one is on
+  `/persist`, and the systemd-boot installer reads the empty one. Copy it back
+  first: `cp /mnt/persist/etc/machine-id /mnt/etc/machine-id`.
 
 #### Forensics
 

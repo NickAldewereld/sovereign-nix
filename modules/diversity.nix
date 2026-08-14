@@ -64,11 +64,16 @@ in
 
     boot.kernel.sysctl = {
       # The derived range overlaps the kernel's ephemeral source-port range
-      # (net.ipv4.ip_local_port_range, 32768-60999 by default), so an outbound
-      # connection can be holding the sshd port at the moment sshd restarts,
-      # and any unprivileged process can bind it in that window. Reserving the
-      # port stops the kernel from handing it out as a source port at all.
-      # Found by Rick Okkersen.
+      # (net.ipv4.ip_local_port_range, 32768-60999 by default). Reserving the
+      # port stops the kernel from ever handing it out as a source port.
+      #
+      # Measured on a test host, so the limits are known rather than assumed:
+      # an ESTABLISHED outbound connection on the port does NOT stop sshd from
+      # restarting, because sshd sets SO_REUSEADDR. What does stop it is a
+      # local process that LISTENS on the port while sshd is down, and this
+      # sysctl does not prevent that: it excludes automatic allocation, not an
+      # explicit bind. Treat it as hygiene, not a control.
+      # Overlap found by Rick Okkersen.
       "net.ipv4.ip_local_reserved_ports" = toString sshPort;
 
       # Harmless per-host tuning inside safe margins: every host fingerprints
