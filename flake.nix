@@ -66,6 +66,8 @@
         lockout-guard = import ./checks/lockout-guard.nix { inherit pkgs self nixpkgs; };
         no-personal-data = import ./checks/no-personal-data.nix { inherit pkgs; };
         consumable = import ./checks/consumable.nix { inherit pkgs self; };
+        mutation = import ./checks/mutation.nix { inherit pkgs self nixpkgs; };
+        limits = import ./checks/limits.nix { inherit pkgs self; };
       };
     };
 }

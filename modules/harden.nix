@@ -2,6 +2,7 @@
 { config, lib, ... }:
 let
   cfg = config.sovereign.harden;
+  policy = import ../lib/harden-policy.nix;
 
   # Somebody who can actually get in: a key or a password, declared here so
   # the configuration itself proves it.
@@ -73,33 +74,21 @@ in
           }
         ];
 
-        boot.kernel.sysctl = {
-          "kernel.kptr_restrict" = 2;
-          "kernel.dmesg_restrict" = 1;
-          "kernel.unprivileged_bpf_disabled" = 1;
-          "net.core.bpf_jit_harden" = 2;
-          "kernel.yama.ptrace_scope" = 1;
-          "net.ipv4.conf.all.rp_filter" = 1;
-          "net.ipv4.conf.default.rp_filter" = 1;
-          "net.ipv4.tcp_syncookies" = 1;
-          "fs.protected_symlinks" = 1;
-          "fs.protected_hardlinks" = 1;
-          "fs.protected_fifos" = 2;
-          "fs.protected_regular" = 2;
-        };
-        boot.kernelParams = [
-          "init_on_alloc=1"
-          "init_on_free=1"
-          "page_alloc.shuffle=1"
-        ];
+        boot.kernel.sysctl = policy.sysctls;
+        boot.kernelParams = policy.kernelParams;
         nix.settings.sandbox = true;
         security.sudo.execWheelOnly = true;
       }
       (lib.mkIf cfg.ssh {
-        services.openssh.settings = {
-          PasswordAuthentication = false;
-          KbdInteractiveAuthentication = false;
-          PermitRootLogin = "no";
+        # PID 1 binds the port at boot and hands sshd a ready socket. Measured
+        # on a test host: without this, an unprivileged local process can take
+        # the port while sshd is down, sshd then fails to bind 0.0.0.0, comes
+        # up on :: alone, and systemd still reports the unit active. A
+        # half-listening sshd looks healthy. With the socket owned by PID 1
+        # there is no window to take. Costs a fork per connection.
+        services.openssh.startWhenNeeded = lib.mkDefault true;
+
+        services.openssh.settings = policy.sshd // {
           Ciphers = [
             "chacha20-poly1305@openssh.com"
             "aes256-gcm@openssh.com"

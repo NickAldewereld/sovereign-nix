@@ -13,6 +13,7 @@ let
       ../profiles/laptop.nix
       {
         sovereign.impermanence.device = "/dev/mapper/cryptroot";
+        sovereign.impermanence.persistPaths = [ "/etc/nixos" ];
         # This check deliberately evaluates on the default (sentinel) seed.
         sovereign.diversity.allowExampleSeed = true;
         fileSystems."/" = {

@@ -20,6 +20,7 @@ in
       example = [ "/etc/NetworkManager/system-connections" ];
       description = "Directories bind-mounted from /persist<path>.";
     };
+    allowEphemeralConfig = lib.mkEnableOption "keeping the configuration on the root that gets wiped";
     keepPreviousRoot = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -36,6 +37,28 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # A machine that wipes the directory holding its own configuration cannot
+    # rebuild itself. Found the hard way: the first install put /etc/nixos on
+    # the root, the first boot threw it away, and the machine could no longer
+    # be changed from itself. Stopped at evaluation, like the other guards.
+    assertions = [
+      {
+        assertion = cfg.allowEphemeralConfig || lib.elem "/etc/nixos" cfg.persistPaths;
+        message = ''
+          sovereign.impermanence: /etc/nixos is not in persistPaths, so this
+          machine throws its own configuration away at the first boot and
+          cannot rebuild itself afterwards.
+
+            sovereign.impermanence.persistPaths = [ "/etc/nixos" ... ];
+
+          If the configuration lives somewhere else on purpose (in /home, or
+          only on a remote you deploy from), say so:
+
+            sovereign.impermanence.allowEphemeralConfig = true;
+        '';
+      }
+    ];
+
     boot.initrd.supportedFilesystems = [ "btrfs" ];
 
     # This unit only exists to flush a transient machine-id from RAM to disk.

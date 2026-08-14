@@ -39,6 +39,8 @@
   sovereign.impermanence = {
     device = "/dev/mapper/cryptroot";
     persistPaths = [
+      # Without this the machine wipes its own configuration at the first boot.
+      "/etc/nixos"
       "/etc/NetworkManager/system-connections"
       "/etc/sovereign"
       "/var/lib/nixos"

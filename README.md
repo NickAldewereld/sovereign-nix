@@ -42,6 +42,9 @@ is stated here rather than left for you to discover.
 | EU resolvers over TLS, EU time | [`checks/sovereign.nix`](checks/sovereign.nix) reads the generated `resolved.conf` and `timesyncd.conf` |
 | The four modules compose | [`checks/default-module.nix`](checks/default-module.nix) forces a full system evaluation |
 | The seed is an input, not a file read at eval time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile` |
+| The hardening assertions are not vacuous | [`checks/mutation.nix`](checks/mutation.nix) breaks every value in [`lib/harden-policy.nix`](lib/harden-policy.nix) on purpose, one at a time, and requires the comparison to catch each one |
+| A machine cannot wipe its own configuration | [`checks/impermanence.nix`](checks/impermanence.nix) and an evaluation guard: `/etc/nixos` must be persisted, or you have to say out loud that the config lives elsewhere |
+| PID 1 owns the SSH socket, so the port cannot be taken | [`checks/limits.nix`](checks/limits.nix) boots one machine each way and shows an unprivileged user taking the port on the old arrangement and failing on the new one |
 | A configuration that locks you out does not build | [`checks/lockout-guard.nix`](checks/lockout-guard.nix) proves that hardening sshd with no way in fails to *evaluate*, that root keys do not count once root login is off, and that a user with a key or a password clears it |
 | The example seed cannot reach a machine by accident | [`checks/seed-guard.nix`](checks/seed-guard.nix) proves a system on the sentinel seed fails to *evaluate*, and that `allowExampleSeed` is the only way past it |
 | No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for SSH key types, e-mail addresses, disk serials and the author's own names |
@@ -60,7 +63,11 @@ Two things were verified by hand instead:
   endpoints were verified by hand: `dns0.eu` did not answer on port 853 from a
   major Dutch ISP, which is why the defaults are DNS4EU and Quad9.
 
-Four things are not proven at all, and are not claimed:
+Four things are not proven at all, and are not claimed. Two of them are
+*executable*: [`checks/limits.nix`](checks/limits.nix) and
+[`checks/impermanence.nix`](checks/impermanence.nix) assert that the bad thing
+still happens, so the day a limit stops being true the build says so instead of
+the README quietly going stale.
 
 - **Binary diversity.** The diversity check proves two hosts are configured
   differently. It does not prove that an exploit working on one fails on the
@@ -78,9 +85,10 @@ Four things are not proven at all, and are not claimed:
   unprivileged process that LISTENS on the port while sshd is down, which is
   possible exactly because the port is above 1023, and
   `ip_local_reserved_ports` does not prevent it: it excludes automatic
-  allocation, not an explicit bind. Worth knowing if that happens: sshd failed
-  to bind `0.0.0.0`, came up on `::` alone, and systemd still reported the
-  unit as `active`. A half-listening sshd looks healthy.
+  allocation, not an explicit bind. What does close that window is socket
+  activation, which this module now switches on: PID 1 binds the port at boot,
+  so there is nothing to take. The limit is kept executable both ways in
+  [`checks/limits.nix`](checks/limits.nix).
 - **`/home` is not ephemeral.** The wipe covers the system root. `/home` is a
   separate subvolume and survives untouched, so user-level persistence
   (`~/.bashrc`, `~/.profile`, `~/.config/autostart`, a systemd user unit)
@@ -102,6 +110,15 @@ ptrace scope), boot parameters (`init_on_alloc`, `init_on_free`), a key-only
 sshd with modern crypto, a default-deny firewall, and the Nix sandbox on.
 
 `harden.firewall = false` means "do not touch the firewall", not "disable it".
+
+sshd is socket-activated (`startWhenNeeded`), so PID 1 binds the port at boot
+and hands sshd a ready socket. That is not a performance choice. Measured on a
+test host: with sshd holding its own socket, an unprivileged local process can
+take the port while sshd is down, after which sshd fails to bind `0.0.0.0`,
+comes up on `::` alone, and systemd still reports the unit as `active`. A
+half-listening sshd looks healthy. With the socket owned by PID 1 there is no
+window to take. It costs a fork per connection; set
+`services.openssh.startWhenNeeded = false` if that matters more to you.
 
 Because this module closes root's SSH door, a configuration that leaves no
 other way in **fails to evaluate**. That is not a courtesy: a hardened machine
@@ -151,9 +168,11 @@ and boots the old root rather than silently pretending.
 Two things that bite on a real install, both found the first time this was
 installed on a machine other than the author's:
 
-- **Put `/etc/nixos` in `persistPaths`.** It lives on the root. Without it your
-  configuration is gone at the first reboot, and the machine is then hard to
-  rebuild from itself.
+- **`/etc/nixos` has to be in `persistPaths`.** It lives on the root, so
+  without it your configuration is gone at the first reboot and the machine
+  cannot rebuild itself. This is now an evaluation error rather than advice.
+  If the configuration genuinely lives elsewhere, set
+  `allowEphemeralConfig = true` and the guard steps aside.
 - **Reinstalling over an existing impermanent root fails at the bootloader**
   with `IndexError: list index out of range`. The wipe leaves an empty
   `/etc/machine-id` placeholder on the root while the real one is on

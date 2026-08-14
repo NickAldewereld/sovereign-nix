@@ -38,7 +38,10 @@ let
           sovereign.impermanence = {
             enable = true;
             device = "/dev/mapper/cryptroot";
-            persistPaths = [ "/var/log" ];
+            persistPaths = [
+              "/etc/nixos"
+              "/var/log"
+            ];
           };
           fileSystems."/" = {
             device = "/dev/mapper/cryptroot";
@@ -75,6 +78,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("mkdir -p /mnt/d && mount /dev/vdb /mnt/d")
     machine.succeed("btrfs subvolume create /mnt/d/@root")
     machine.succeed("btrfs subvolume create /mnt/d/@persist")
+    machine.succeed("btrfs subvolume create /mnt/d/@home")
     # systemd creates /var/lib/machines and /var/lib/portables as subvolumes
     # on btrfs; a subvolume with children cannot be deleted, so the wipe has
     # to clear nested ones first. This is what broke on real hardware.
@@ -83,6 +87,9 @@ pkgs.testers.runNixOSTest {
     machine.succeed("btrfs subvolume create /mnt/d/@root/var/lib/portables")
     machine.succeed("touch /mnt/d/@root/leftover")
     machine.succeed("touch /mnt/d/@persist/keepme")
+    # An executable limit, not a feature: user-level persistence survives the
+    # wipe. The README says so; this is what would fail if that ever changed.
+    machine.succeed("touch /mnt/d/@home/user-persistence")
     machine.succeed("umount /mnt/d")
 
     # first wipe: root moved aside, fresh root created, persist untouched,
@@ -106,6 +113,7 @@ pkgs.testers.runNixOSTest {
     machine.fail("test -e /mnt/d/@root_prev/var/lib/machines")
     machine.fail("test -e /mnt/d/@root/leftover")
     machine.succeed("test -e /mnt/d/@persist/keepme")
+    machine.succeed("test -e /mnt/d/@home/user-persistence")
 
     # sovereign.nowipe on the kernel command line: the root of this boot and
     # the previous one both stay put, so an incident can be looked at
