@@ -63,6 +63,7 @@
         default-module = import ./checks/default-module.nix { inherit pkgs self nixpkgs; };
         seed-input = import ./checks/seed-input.nix { inherit pkgs self; };
         seed-guard = import ./checks/seed-guard.nix { inherit pkgs self nixpkgs; };
+        lockout-guard = import ./checks/lockout-guard.nix { inherit pkgs self nixpkgs; };
         no-personal-data = import ./checks/no-personal-data.nix { inherit pkgs; };
         consumable = import ./checks/consumable.nix { inherit pkgs self; };
       };

@@ -5,6 +5,12 @@ pkgs.testers.runNixOSTest {
     imports = [ self.nixosModules.harden ];
     sovereign.harden.enable = true;
     services.openssh.enable = true;
+    # Root cannot log in over SSH once this module is on, so the lockout
+    # assertion wants somebody who can. Same reason a real host needs one.
+    users.users.test = {
+      isNormalUser = true;
+      hashedPasswordFile = "/persist/etc/passwd.test";
+    };
   };
   testScript = ''
     machine.wait_for_unit("multi-user.target")

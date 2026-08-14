@@ -42,6 +42,7 @@ is stated here rather than left for you to discover.
 | EU resolvers over TLS, EU time | [`checks/sovereign.nix`](checks/sovereign.nix) reads the generated `resolved.conf` and `timesyncd.conf` |
 | The four modules compose | [`checks/default-module.nix`](checks/default-module.nix) forces a full system evaluation |
 | The seed is an input, not a file read at eval time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile` |
+| A configuration that locks you out does not build | [`checks/lockout-guard.nix`](checks/lockout-guard.nix) proves that hardening sshd with no way in fails to *evaluate*, that root keys do not count once root login is off, and that a user with a key or a password clears it |
 | The example seed cannot reach a machine by accident | [`checks/seed-guard.nix`](checks/seed-guard.nix) proves a system on the sentinel seed fails to *evaluate*, and that `allowExampleSeed` is the only way past it |
 | No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for SSH key types, e-mail addresses, disk serials and the author's own names |
 | Someone else can actually take this flake as an input | [`checks/consumable.nix`](checks/consumable.nix) fails the build if `flake.lock` ever contains a `path` input again |
@@ -101,6 +102,14 @@ ptrace scope), boot parameters (`init_on_alloc`, `init_on_free`), a key-only
 sshd with modern crypto, a default-deny firewall, and the Nix sandbox on.
 
 `harden.firewall = false` means "do not touch the firewall", not "disable it".
+
+Because this module closes root's SSH door, a configuration that leaves no
+other way in **fails to evaluate**. That is not a courtesy: a hardened machine
+with an ephemeral root and no user account is unreachable the moment it
+reboots, and a password you set by hand does not survive the wipe to save you.
+The guard is deliberately loose in one place: with `users.mutableUsers` on (the
+NixOS default) a password can be set later with `passwd`, so any normal user
+clears it. Turn `mutableUsers` off and the check gets strict again.
 
 ### `sovereign.diversity`
 
