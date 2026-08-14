@@ -18,7 +18,7 @@ let
     let
       value = if lib.isBool v then (if v then "yes" else "no") else toString v;
     in
-    ''machine.succeed("${pkgs.openssh}/bin/sshd -T | grep -qix '${lib.toLower k} ${value}'")''
+    ''machine.succeed("${pkgs.openssh}/bin/sshd -T -h /tmp/hostkey | grep -qix '${lib.toLower k} ${value}'")''
   ) policy.sshd;
 in
 pkgs.testers.runNixOSTest {
@@ -40,6 +40,10 @@ pkgs.testers.runNixOSTest {
     ${lib.concatStringsSep "\n" cmdlineLines}
     # PID 1 owns the listening socket, so sshd.service is idle by design
     machine.wait_for_unit("sshd.socket")
+    # `sshd -T` refuses to run without a host key, and with socket activation
+    # the real ones are generated on first connection. Hand it a throwaway:
+    # what is under test is the resolved configuration, not the key.
+    machine.succeed("${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -f /tmp/hostkey -N \"\"")
     ${lib.concatStringsSep "\n" sshdLines}
   '';
 }
