@@ -48,8 +48,8 @@ is stated here rather than left for you to discover.
 | PID 1 owns the SSH socket, so the port cannot be taken | [`checks/limits.nix`](checks/limits.nix) boots one machine each way and shows an unprivileged user taking the port on the old arrangement and failing on the new one |
 | A configuration that locks you out does not build | [`checks/lockout-guard.nix`](checks/lockout-guard.nix) proves that hardening sshd with no way in fails to *evaluate*, that root keys do not count once root login is off, and that a user with a key or a password clears it |
 | The example seed cannot reach a machine by accident | [`checks/seed-guard.nix`](checks/seed-guard.nix) proves a system on the sentinel seed fails to *evaluate*, and that `allowExampleSeed` is the only way past it |
-| No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for the *shapes* of SSH key types, e-mail addresses and disk serials. Deliberately not for names or domains: a check that spelled those out would publish the very thing it guards |
-| Someone else can actually take this flake as an input | [`checks/consumable.nix`](checks/consumable.nix) fails the build if `flake.lock` ever contains a `path` input again |
+| No real identity is published | [`checks/no-personal-data.nix`](checks/no-personal-data.nix) greps the whole tree for the *shapes* of SSH key types, e-mail addresses and disk serials, and first proves each pattern matches a planted sample so it cannot pass by matching nothing. Deliberately not names or domains: a check that spelled those out would publish the very thing it guards |
+| Someone else can actually take this flake as an input | [`checks/consumable.nix`](checks/consumable.nix) fails the build if `flake.lock` ever contains a `path` input again, and refuses to pass if the lock file is missing or if its own pattern matches nothing |
 
 ## Limits: what the tests cannot prove
 
