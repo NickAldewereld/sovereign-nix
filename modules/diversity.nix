@@ -1,6 +1,9 @@
-# Deterministic per-host diversity: same seed, same machine; different seed,
-# different machine. The seed is defense-in-depth, not a secret — but keep it
-# out of public repos.
+# Deterministic per-host diversity: the same seed always produces the same
+# derived values. The converse does NOT hold: the values live in a small space
+# (40000 ports, 41 swappiness values, 6145 somaxconn values), so two different
+# seeds can produce an identical machine. See checks/diversity-lib.nix for a
+# pair that does. The seed is defense-in-depth, not a secret — but keep it out
+# of public repos.
 { config, lib, ... }:
 let
   cfg = config.sovereign.diversity;
@@ -56,9 +59,13 @@ in
 
     services.openssh.ports = [ sshPort ];
 
-    # MAC randomisation is a privacy measure, not a hardening one: it stops a
-    # network from tracking this host across visits. It does not shrink the
-    # attack surface.
+    # NOT derived from the seed, and deliberately not deterministic:
+    # NetworkManager generates a fresh MAC per connection. So this is the one
+    # thing in this module where the same seed does *not* give the same
+    # machine, and it is a privacy measure rather than a hardening one: it
+    # stops a network from tracking this host across visits. It does not
+    # shrink the attack surface. Pointed out by Ryan Theunissen, who read the
+    # module instead of the README.
     networking.networkmanager.wifi.macAddress = "random";
     networking.networkmanager.ethernet.macAddress = "random";
 

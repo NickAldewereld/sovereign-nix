@@ -1,5 +1,5 @@
 {
-  description = "Secure, sovereign NixOS modules — every machine unique, every boot clean, every line auditable";
+  description = "Secure, sovereign NixOS modules — every boot clean, every claim tested, every limit written down";
 
   # No `hostSeed` input here. A relative `path:` input cannot be locked by
   # anyone who takes this flake as a dependency: Nix refuses to read the whole

@@ -2,8 +2,8 @@
 
 NixOS modules for machines that are hard to attack **at scale**.
 
-Every machine unique in *configuration*, every boot clean, every line
-auditable.
+Every boot clean, every line auditable, and every machine configured a little
+differently. Not *uniquely*: see the limits below.
 
 An exploit is cheap because it fits millions of identical systems. These
 modules attack that economy: hardening shrinks the target, deterministic
@@ -35,7 +35,7 @@ is stated here rather than left for you to discover.
 | Hardening is actually applied | [`checks/harden.nix`](checks/harden.nix) reads the sysctls and `/proc/cmdline` inside a booted VM |
 | Two seeds, two configurations (not: two attack surfaces) | [`checks/diversity.nix`](checks/diversity.nix) boots two VMs with different seeds and finds SSH on different ports; port 22 is closed |
 | The derived SSH port cannot be stolen by an ephemeral socket | [`checks/diversity.nix`](checks/diversity.nix) reads `ip_local_reserved_ports` in both booted VMs |
-| Same seed, same machine | [`checks/diversity-lib.nix`](checks/diversity-lib.nix) asserts the derivation is deterministic and stays in range |
+| Same seed, same derived values | [`checks/diversity-lib.nix`](checks/diversity-lib.nix) asserts the derivation is deterministic and stays in range. The converse does not hold, and the same check pins a colliding pair of seeds to prove it |
 | The root really is thrown away | [`checks/impermanence.nix`](checks/impermanence.nix) wipes a scratch btrfs disk twice, including nested subvolumes, and proves `/persist` survives |
 | One previous root survives for inspection | [`checks/impermanence.nix`](checks/impermanence.nix) finds the old root under `@root_prev` after a wipe, and gone after the next one |
 | Incident response can stop the wipe | [`checks/impermanence.nix`](checks/impermanence.nix) runs the wipe with `sovereign.nowipe` on the command line and finds both roots intact |
@@ -59,16 +59,39 @@ Two things were verified by hand instead:
   `/` was gone after reboot while `/persist` and `/home` were intact, and the
   root of the previous boot was still readable under `@root_prev`. The second
   machine was a plain VM, so anyone can repeat it.
-- **Reachable resolvers.** A test can only assert what was configured. The DoT
-  endpoints were verified by hand: `dns0.eu` did not answer on port 853 from a
-  major Dutch ISP, which is why the defaults are DNS4EU and Quad9.
+- **Reachable resolvers.** A test can only assert what was configured, so the
+  endpoints were checked by hand. An earlier version of this file said
+  `dns0.eu` "did not answer on port 853 from a major Dutch ISP", which was a
+  conclusion the measurement did not support: the service is simply gone.
+  `zero.dns0.eu` no longer resolves and the domain now points at a parking
+  host. A dead endpoint was read as a network problem. Thanks to Ryan
+  Theunissen for catching it.
 
-Four things are not proven at all, and are not claimed. Two of them are
-*executable*: [`checks/limits.nix`](checks/limits.nix) and
+  What is verified, at the time of writing: both defaults complete a TLS
+  handshake on port 853 with a valid certificate, and `protective.joindns4.eu`
+  is in the DNS4EU certificate's SAN list, which is what `systemd-resolved`
+  checks against. This is a fact about one day, not a property of the code.
+
+These things are not proven at all, and are not claimed. Several of them are
+*executable*: [`checks/limits.nix`](checks/limits.nix),
+[`checks/diversity-lib.nix`](checks/diversity-lib.nix) and
 [`checks/impermanence.nix`](checks/impermanence.nix) assert that the bad thing
 still happens, so the day a limit stops being true the build says so instead of
 the README quietly going stale.
 
+- **Different seeds do not give different machines.** The derived values live
+  in a small space: 40000 ports, 41 swappiness values, 6145 somaxconn values.
+  Two hosts have a 50% chance of sharing an SSH port at around 235 machines,
+  and full collisions across all three values exist:
+  `john-balls-14333` and `john-balls-94081` both give port 33670, swappiness
+  42 and somaxconn 3377. Found by brute force by Ryan Theunissen, and now
+  pinned in [`checks/diversity-lib.nix`](checks/diversity-lib.nix) so the claim
+  cannot quietly come back. Two hosts sharing a port is not a vulnerability;
+  the wrong claim was the problem.
+- **MAC randomisation is not derived from the seed.** It is
+  `NetworkManager`'s own randomisation, a fresh address per connection. So it
+  is the one value here that is deliberately *not* reproducible, and it is a
+  privacy measure rather than a hardening one.
 - **Binary diversity.** The diversity check proves two hosts are configured
   differently. It does not prove that an exploit working on one fails on the
   other, and it cannot: the kernel, libc and binaries are identical. Per-host
@@ -131,9 +154,15 @@ clears it. Turn `mutableUsers` off and the check gets strict again.
 ### `sovereign.diversity`
 
 One pure function turns a per-host seed into reproducible values: the SSH
-port and harmless kernel tuning. Same seed, same machine, so a config is still
+port and harmless kernel tuning. Same seed, same values, so a config is still
 auditable, diffable and reproducible after a reinstall. That determinism is
 the point: uniqueness you cannot reconstruct is uniqueness you cannot audit.
+
+The reverse is not true and is not claimed. Those values live in a small
+space, so two different seeds can produce an identical machine, and at fleet
+scale a shared SSH port is likely rather than exotic. See
+[Limits](#limits-what-the-tests-cannot-prove) for the numbers and for a
+colliding pair.
 
 What this buys, stated narrowly: a host that does not answer where a mass
 scanner expects it, and a fleet where one hardcoded shape does not fit every
@@ -146,10 +175,13 @@ the range (20000-59999) overlaps the kernel's ephemeral source-port range
 What that does and does not buy you is measured, not assumed; see
 [Limits](#limits-what-the-tests-cannot-prove).
 
-MAC randomisation is enabled here too, but it is **privacy, not security**: it
-stops a network from tracking the host across visits. It does not shrink the
-attack surface, and it is listed under this module only because it is derived
-from the same "each host looks different" idea.
+MAC randomisation is enabled here too, and it is the odd one out twice over.
+It is **privacy, not security**: it stops a network from tracking the host
+across visits, it does not shrink the attack surface. And it is **not derived
+from the seed at all**: NetworkManager generates a fresh address per
+connection, so this is the one value in this module that is deliberately not
+reproducible. It sits here only because it comes from the same "each host
+looks different" idea.
 
 The seed is defence in depth, not a secret. If it leaks you lose a layer, not
 the system. Keep it out of public repositories anyway.
@@ -351,3 +383,10 @@ review the claims in public:
 - **Daan Breur** pointed out that a test proving two configurations differ is
   not a test proving a security property, which is why the diversity claim is
   now labelled for what it actually demonstrates.
+- **Ryan Theunissen** read the code rather than the README and took the
+  remaining half of that claim apart: he brute-forced a pair of seeds that
+  produce an identical machine, noticed that MAC randomisation never used the
+  seed in the first place, found that this file promised four limits and then
+  listed five, and established that `dns0.eu` has simply been gone since
+  October 2025, so the note about it here was a conclusion the measurement did
+  not support.
