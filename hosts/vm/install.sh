@@ -19,11 +19,17 @@ echo "This erases everything on $DISK."
 read -r -p "Type ERASE to continue: " confirm
 [ "$confirm" = ERASE ] || exit 1
 
+# /boot is its own partition on purpose. GRUB reads its modules from the
+# filesystem at boot, and inside @root the wipe would delete them: the machine
+# installs fine, boots once, and lands in a GRUB rescue prompt after that.
 parted -s "$DISK" mklabel msdos
-parted -s "$DISK" mkpart primary btrfs 1MiB 100%
+parted -s "$DISK" mkpart primary ext4 1MiB 513MiB
+parted -s "$DISK" mkpart primary btrfs 513MiB 100%
 sleep 2
 
-PART="${DISK}1"
+BOOT="${DISK}1"
+PART="${DISK}2"
+mkfs.ext4 -F -L sovboot "$BOOT"
 mkfs.btrfs -f -L sovereign "$PART"
 
 mount "$PART" /mnt
@@ -32,7 +38,8 @@ umount /mnt
 
 OPTS="compress=zstd,noatime"
 mount -o "subvol=@root,$OPTS" "$PART" /mnt
-mkdir -p /mnt/nix /mnt/persist /mnt/home
+mkdir -p /mnt/nix /mnt/persist /mnt/home /mnt/boot
+mount "$BOOT" /mnt/boot
 mount -o "subvol=@nix,$OPTS" "$PART" /mnt/nix
 mount -o "subvol=@persist,$OPTS" "$PART" /mnt/persist
 mount -o "subvol=@home,$OPTS" "$PART" /mnt/home

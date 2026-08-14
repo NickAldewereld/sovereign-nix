@@ -33,7 +33,11 @@ Then remove `-cdrom` and `-boot d`, and boot from the disk.
 
 ## Check the claims yourself
 
-Log in on the console as `demo` / `sovereign`.
+Log in on the console as `demo` / `sovereign`. SSH will answer on 43581 but
+will not let you in: `harden` accepts keys only, and this host ships with
+none. Add your own to `hosts/vm/default.nix` if you want a shell over the
+network. The console is the way in by default, which is the point of the
+`hostfwd` line above being only enough to see that the port answers.
 
 ```bash
 # the derived port, and 22 closed

@@ -20,7 +20,10 @@
   nixpkgs.hostPlatform = "x86_64-linux";
 
   # BIOS boot on /dev/vda, so `qemu-system-x86_64 -drive file=disk.qcow2`
-  # needs no firmware flags and no EFI variable store.
+  # needs no firmware flags and no EFI variable store. /boot is a partition of
+  # its own: GRUB reads its modules from the filesystem at boot, and inside
+  # @root they would be deleted by the wipe. The machine then installs fine,
+  # boots once, and drops into a GRUB rescue prompt on the second boot.
   boot.loader.grub = {
     enable = true;
     device = "/dev/vda";
@@ -42,6 +45,10 @@
       };
     in
     {
+      "/boot" = {
+        device = "/dev/disk/by-label/sovboot";
+        fsType = "ext4";
+      };
       "/" = sub "@root";
       "/nix" = sub "@nix";
       "/home" = sub "@home";
