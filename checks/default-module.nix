@@ -32,6 +32,13 @@ assert port >= 20000 && port <= 59999;
 # Force full config evaluation (not just the two attrs above) so option
 # collisions and assertions actually fire. drvPath only evaluates the
 # derivation, it does not build it.
+#
+# Both published hosts go through the same forcing, so neither can rot into a
+# configuration that no longer evaluates while nobody is looking.
 builtins.seq sys.config.system.build.toplevel.drvPath (
-  pkgs.runCommand "default-module-ok" { } "echo ok > $out"
+  builtins.seq self.nixosConfigurations.vm.config.system.build.toplevel.drvPath (
+    builtins.seq self.nixosConfigurations.example.config.system.build.toplevel.drvPath (
+      pkgs.runCommand "default-module-ok" { } "echo ok > $out"
+    )
+  )
 )

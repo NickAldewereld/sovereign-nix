@@ -41,7 +41,7 @@ is stated here rather than left for you to discover.
 | One previous root survives for inspection | [`checks/impermanence.nix`](checks/impermanence.nix) finds the old root under `@root_prev` after a wipe, and gone after the next one |
 | Incident response can stop the wipe | [`checks/impermanence.nix`](checks/impermanence.nix) runs the wipe with `sovereign.nowipe` on the command line and finds both roots intact |
 | EU resolvers over TLS, EU time | [`checks/sovereign.nix`](checks/sovereign.nix) reads the generated `resolved.conf` and `timesyncd.conf` |
-| The four modules compose | [`checks/default-module.nix`](checks/default-module.nix) forces a full system evaluation |
+| The four modules compose, and both published hosts still evaluate | [`checks/default-module.nix`](checks/default-module.nix) forces a full system evaluation of the module set and of `hosts/example` and `hosts/vm` |
 | The host reads no files at evaluation time | [`checks/seed-input.nix`](checks/seed-input.nix) reads the seed back out of the evaluated host and asserts `hosts/example/default.nix` contains no `pathExists`/`readFile`. The seed reaches the host from the flake; in *your* flake it comes from an input, in this one it is the sentinel in the source tree |
 | The hardening assertions are not vacuous | [`checks/mutation.nix`](checks/mutation.nix) breaks every value in [`lib/harden-policy.nix`](lib/harden-policy.nix) on purpose, one at a time, and requires the comparison to catch each one |
 | A machine cannot wipe its own configuration | [`checks/config-guard.nix`](checks/config-guard.nix) proves a system that does not persist `/etc/nixos` fails to *evaluate*, and that `allowEphemeralConfig` is the only other way past it |
