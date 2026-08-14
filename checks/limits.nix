@@ -40,11 +40,14 @@ pkgs.testers.runNixOSTest {
   name = "sovereign-limits";
   nodes = {
     # sshd owns its own socket, the way it worked before socket activation
-    plain = common // {
+    plain = {
+      imports = [ common ];
       services.openssh.startWhenNeeded = false;
     };
     # PID 1 owns the socket, which is what the harden module now does
-    activated = common;
+    activated = {
+      imports = [ common ];
+    };
   };
   testScript = ''
     plain.wait_for_unit("sshd.service")
