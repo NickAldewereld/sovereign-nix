@@ -8,9 +8,9 @@
   nixpkgs,
 }:
 let
-  # A key file rather than a key literal: checks/no-personal-data.nix greps
-  # the whole tree for key material, and a placeholder would trip it.
-  keys = [ "/persist/etc/ssh/authorized_keys" ];
+  # Not a real key: the module only asks whether a way in was declared, and
+  # checks/no-personal-data.nix greps the tree for anything key-shaped.
+  keys = [ "placeholder-not-a-key" ];
   mk =
     extra:
     (nixpkgs.lib.nixosSystem {
@@ -34,14 +34,14 @@ in
 # Nobody can get in: stopped.
 assert (builtins.tryEval (mk { })).success == false;
 # Root keys do not count while PermitRootLogin is "no".
-assert (builtins.tryEval (mk { users.users.root.openssh.authorizedKeys.keyFiles = keys; })).success
+assert (builtins.tryEval (mk { users.users.root.openssh.authorizedKeys.keys = keys; })).success
        == false;
 # A normal user with a key is a way in.
 assert
   (builtins.tryEval (mk {
     users.users.nick = {
       isNormalUser = true;
-      openssh.authorizedKeys.keyFiles = keys;
+      openssh.authorizedKeys.keys = keys;
     };
   })).success;
 # So is a normal user with a password, for the console.
