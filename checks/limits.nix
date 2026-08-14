@@ -64,8 +64,9 @@ pkgs.testers.runNixOSTest {
     plain.succeed("ss -tlnp | grep ':${port} ' | grep -q nc")
 
     # THE FIX: PID 1 binds at boot, so there is no window to take.
+    # There is no sshd.service to stop here: the socket unit is the listener,
+    # and it is bound from boot until shutdown.
     activated.wait_for_unit("sshd.socket")
-    activated.succeed("systemctl stop sshd.service")
     activated.fail(
         "systemd-run --wait --uid=squatter --collect ${nc} -l ${port}"
     )
