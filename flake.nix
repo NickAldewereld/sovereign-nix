@@ -28,6 +28,11 @@
         impermanence = ./modules/impermanence.nix;
         sovereign = ./modules/sovereign.nix;
 
+        # Shipped for months without being an output, so nobody following the
+        # README could reach it. Found by consuming this flake from a real
+        # machine instead of reading it.
+        laptop = ./profiles/laptop.nix;
+
         default = {
           imports = [
             ./modules/harden.nix
@@ -43,7 +48,7 @@
         specialArgs = { inherit seed; };
         modules = [
           self.nixosModules.default
-          ./profiles/laptop.nix
+          self.nixosModules.laptop
           ./hosts/example
           # CI only: lets `nix flake check` evaluate this host on the checked-in
           # sentinel seed. DELETE this when you copy the host — without it the

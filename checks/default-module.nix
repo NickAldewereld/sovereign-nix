@@ -10,7 +10,7 @@ let
     system = "x86_64-linux";
     modules = [
       self.nixosModules.default
-      ../profiles/laptop.nix
+      self.nixosModules.laptop
       {
         sovereign.impermanence.device = "/dev/mapper/cryptroot";
         sovereign.impermanence.persistPaths = [ "/etc/nixos" ];
@@ -29,6 +29,17 @@ let
   port = sys.config.sovereign.diversity.derived.sshPort;
 in
 assert port >= 20000 && port <= 59999;
+# Nothing ships unreachable. profiles/laptop.nix was used by the example host
+# for months while not being an output, so a consumer following the README
+# could not import it.
+assert builtins.attrNames self.nixosModules == [
+  "default"
+  "diversity"
+  "harden"
+  "impermanence"
+  "laptop"
+  "sovereign"
+];
 # Force full config evaluation (not just the two attrs above) so option
 # collisions and assertions actually fire. drvPath only evaluates the
 # derivation, it does not build it.

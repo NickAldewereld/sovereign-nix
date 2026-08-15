@@ -266,6 +266,7 @@ from `cache.nixos.org`.
       system = "x86_64-linux";
       modules = [
         sovereign-nix.nixosModules.default   # or pick individual modules
+        sovereign-nix.nixosModules.laptop    # optional: power, wifi, zram
         ./hardware-configuration.nix
         {
           sovereign.harden.enable = true;
