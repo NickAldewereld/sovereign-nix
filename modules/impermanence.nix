@@ -67,6 +67,10 @@ in
     # nixos-rebuild switch reporting failure.
     systemd.suppressedSystemUnits = [ "systemd-machine-id-commit.service" ];
 
+    # The wipe runs as a stage-1 shell hook; 26.05 defaults to systemd stage 1,
+    # which has no postDeviceCommands. Keep the scripted initrd.
+    boot.initrd.systemd.enable = false;
+
     boot.initrd.postDeviceCommands = lib.mkAfter (
       import ../lib/wipe-script.nix {
         device = cfg.device;
@@ -84,6 +88,7 @@ in
         {
           "/etc/machine-id" = {
             device = "/persist/etc/machine-id";
+            fsType = "none";
             options = [ "bind" ];
             neededForBoot = true;
           };
@@ -92,6 +97,7 @@ in
       ++ map (p: {
         "${p}" = {
           device = "/persist${p}";
+          fsType = "none";
           options = [ "bind" ];
         };
       }) cfg.persistPaths
